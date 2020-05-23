@@ -1,0 +1,229 @@
+#!/bin/sh
+# chkconfig: - 90 10
+# Desription: WebAPI
+# processname: boot-service.template
+
+# Source function library.
+if [ -f /etc/init.d/functions ] ; then
+    . /etc/init.d/functions
+elif [ -f /etc/rc.d/init.d/functions ] ; then
+    . /etc/rc.d/init.d/functions
+else
+    exit 0
+fi
+
+init() {
+    NAME="tibco-stub-and-mock"
+    POLLING_TIME=10000
+    SERVICE_HOME=/opt/tibco-stub-and-mock/
+    SERVICE_JAR=tibco-stub-and-mock.jar
+    SHUTDOWN_WAIT="5"
+    CATALINA_HOME="/usr/share/tomcat6"
+
+    JAVACMD=java
+
+    DEFAULT_PORT_PREFIX=2010
+    guessPort
+
+    PORT=${PORT_PREFIX}8
+    OPTIONS=" -Drxsname=${NAME} "
+    if [ -f "/etc/profile.d/rx_setenv.sh" ]; then
+        . /etc/profile.d/rx_setenv.sh
+    fi
+    if [[ "$RX_ENV" = "dev" || "$RX_ENV" = "staging" ]]; then
+        # remote debug configuration
+        OPTIONS="${OPTIONS} -agentlib:jdwp=server=y,transport=dt_socket,address=${PORT_PREFIX}9,suspend=n"
+    fi
+
+    OPTIONS="${OPTIONS} -Dserver.port=${PORT} -Dserver.servlet.context-path=/webapi-1.0/tibco-mock -Dcatalina.base=${SERVICE_HOME} -Dservice.home=${SERVICE_HOME} -Dspring.config.location=file:///opt/tibco-stub-and-mock/conf/application.properties"
+    OPTIONS="${OPTIONS} -Xloggc:${SERVICE_HOME}logs/gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintTenuringDistribution "
+    OPTIONS="${OPTIONS} -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=10M  -XX:+PrintReferenceGC -XX:+PrintConcurrentLocks"
+    OPTIONS="${OPTIONS} -Djavamelody.storage-directory=${SERVICE_HOME}javamelody"
+    OPTIONS="${OPTIONS} -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    OPTIONS="${OPTIONS} -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${SERVICE_HOME}/logs/mdumps/"
+
+
+    # jvm configuration
+    OPTIONS="${OPTIONS} -Xmx2g -Xms64m -Xss1m "
+
+    if [ -r "${CATALINA_HOME}/conf/jmxremote.password" ]; then
+        # enable jmx
+        OPTIONS="${OPTIONS} -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=${PORT_PREFIX}3 -Dcom.sun.management.jmxremote.authenticate=true -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.password.file=${CATALINA_HOME}/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=${CATALINA_HOME}/conf/jmxremote.access"
+    else
+        echo "JMX will be disabled because access and password files not readable by user ($USER)"
+    fi
+
+    # log4j configuration
+    OPTIONS="${OPTIONS} -Dlog4j.configuration=file:${SERVICE_HOME}conf/log4j.xml"
+
+    # logback configuration.
+    OPTIONS="${OPTIONS} -Dlogging.config=${SERVICE_HOME}conf/logback.xml"
+
+    # jboss-logging
+    #OPTIONS="${OPTIONS} -Dorg.jboss.logging.provider=slf4j"
+
+    # set user.home
+    OPTIONS="${OPTIONS} -Duser.home=${CATALINA_HOME} "
+
+    # set component name, might be different from $NAME
+    OPTIONS="${OPTIONS} -DcomponentName=tibco-stub-and-mock "
+    OPTIONS="${OPTIONS} -jar ${SERVICE_HOME}libs/$SERVICE_JAR --port=${PORT} $POLLING_TIME"
+    PIDFILE=/var/run/$SERVICE_JAR.pid
+
+    PID=`ps ax |grep java|grep $SERVICE_JAR|awk '{print $1;}'`
+
+    #SU="sudo"
+    # For SELinux we need to use 'runuser' not 'su'
+    if [ -x "/sbin/runuser" ]; then
+        SU="/sbin/runuser -s /bin/sh"
+    else
+        SU="/bin/su -s /bin/sh"
+    fi
+
+    TOMCAT_USER=tomcat
+
+    # Get instance specific config file
+    if [ -r "/etc/sysconfig/${NAME}" ]; then
+        . /etc/sysconfig/${NAME}
+    fi
+}
+
+start() {
+    echo -n $"Starting $NAME: "
+    if [ -e $PIDFILE ]; then
+        PID=`cat $PIDFILE`
+        if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
+            rm -f $PIDFILE;
+        else
+            echo "Process already running"
+            return;
+        fi
+    else
+        if [[ -n $PID ]]; then
+            kill -TERM $PID
+        fi
+    fi
+
+    cd $SERVICE_HOME
+    # Make sure only root can run our script
+    if [[ $EUID -ne 0 ]]; then
+       echo -n "run service as current user ($USER)"
+       PID=`$JAVACMD $OPTIONS > ${SERVICE_HOME}logs/roox-catalina-stdout.log 2>&1 & echo $!`
+       echo "$JAVACMD $OPTIONS"
+    else
+       PID=`$SU - $TOMCAT_USER -c "$JAVACMD $OPTIONS" > ${SERVICE_HOME}logs/roox-catalina-stdout.log 2>&1 & echo $!`
+       echo "$SU - $TOMCAT_USER -c \"$JAVACMD $OPTIONS\""
+    fi
+    if [ -z $PID ]; then
+        echo_failure
+    else
+        echo $PID > $PIDFILE
+        echo_success
+    fi
+    echo
+}
+
+stop() {
+    echo -n $"Stopping $NAME: "
+
+    PID=`cat $PIDFILE`
+    if [ -f $PIDFILE ]; then
+        count="0"
+        SHUTDOWN_VERBOSE="true"
+        kill $PID
+        until [ "$(ps --pid $PID | grep -c $PID)" -eq "0" ] || [ "$count" -gt "$SHUTDOWN_WAIT" ]; do
+            if [ "$SHUTDOWN_VERBOSE" = "true" ]; then
+                echo "waiting for processes $PID to exit"
+            fi
+            sleep 1
+            let count="${count}+1"
+        done
+        if [ "$count" -gt "$SHUTDOWN_WAIT" ]; then
+            if [ "$SHUTDOWN_VERBOSE" = "true" ]; then
+                echo "killing processes which did not stop after ${SHUTDOWN_WAIT} seconds"
+            fi
+            springBootPid=`lsof -i :$PORT | grep LISTEN | grep 'java[^0-9]*[0-9]\+' -o | grep '[0-9]\+' -o`
+            if [ ! -z "$springBootPid" ]; then
+                echo "killing processes $springBootPid"
+                kill -9 $springBootPid
+            fi
+            kill -9 $PID
+        fi
+        echo_success
+        echo
+        rm -f $PIDFILE
+    else
+        springBootPid=`lsof -i:$PORT -t`
+        if [ ! -z "$springBootPid" ]; then
+            echo "killing processes $springBootPid"
+            kill -9 $springBootPid
+        fi
+        echo "Pidfile not found"
+    fi
+}
+
+status(){
+    echo "Checking $NAME..."
+    if [ -f $PIDFILE ]; then
+        PID=`cat $PIDFILE`
+        if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
+            echo "Process dead but pidfile exists"
+        else
+            echo "Running"
+        fi
+    else
+        echo "Service not running"
+    fi
+}
+
+restart() {
+    echo -n $"Restarting $NAME service: "
+    stop
+    sleep 1
+    start
+    echo
+}
+
+guessPort() {
+    if [[ -n $(netstat -ntl | grep :${DEFAULT_PORT_PREFIX}[0-9]) ]]; then
+        # if any port with given prefix is busy - try ports from range 10xxx
+        echo "Default port range ${DEFAULT_PORT_PREFIX}x busy"
+        for i in `seq 10 99`;
+            do
+                # check busy port from 10000 to 10999 sequentially grouped by 10
+                CUR_PORT_PREFIX='10'$i
+                IS_BUSY=$(ss --listening --numeric | tr --squeeze-repeats ' ' | cut --fields=4 --delimiter=' ' | grep -o $CUR_PORT_PREFIX[0-9])
+                if [ -z $IS_BUSY ]; then
+                    break
+                fi
+            done
+        PORT_PREFIX=$CUR_PORT_PREFIX
+        echo "Using port range ${PORT_PREFIX}x"
+    else
+        PORT_PREFIX=${DEFAULT_PORT_PREFIX}
+    fi
+}
+
+init
+
+# See how we were called.
+case "$1" in
+start)
+    start
+;;
+stop)
+    stop
+;;
+status)
+    status
+;;
+restart)
+    stop
+    sleep 1
+    init
+    start
+;;
+*)
+echo $"Usage: $NAME {start|stop|restart|status}"
+exit 1
+esac

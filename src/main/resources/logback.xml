@@ -1,0 +1,46 @@
+<configuration scan="true" scanPeriod="1 minute">
+
+    <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener"/>
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="application" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${catalina.base}/logs/roox-tibco-mock.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${catalina.base}/logs/roox-tibco-mock.log.%d{yyyy-MM-dd}.%i</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%date{YYYY-MM-dd HH:mm:ss} %level{5} [%-16.16thread] %logger{10} [%file] [app=%X{context-name}]
+                [host=%X{host-name}] [cid=%X{context-id}] [sys=%X{system-id}] [prn=%X{user-id}] %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <logger name="ru.drudenko" level="info" additivity="false">
+        <appender-ref ref="console"/>
+        <appender-ref ref="application"/>
+    </logger>
+
+    <logger name="ru.drudenko.tools.tibco" level="info" additivity="false">
+        <appender-ref ref="console"/>
+        <appender-ref ref="application"/>
+    </logger>
+
+    <logger name="org.springframework" additivity="false">
+        <appender-ref ref="application"/>
+    </logger>
+
+    <!--<logger name="org.springframework.boot" level="debug"/>-->
+
+    <root level="info">
+        <appender-ref ref="console"/>
+        <appender-ref ref="application"/>
+    </root>
+</configuration>

@@ -1,0 +1,135 @@
+import org.apache.tools.ant.filters.FixCrLfFilter
+import org.redline_rpm.payload.Directive
+
+plugins {
+    id 'maven-publish'
+    id 'java'
+    id 'groovy'
+    id 'org.springframework.boot' version '2.2.6.RELEASE'
+    id 'io.spring.dependency-management' version '1.0.9.RELEASE'
+    id "nebula.rpm" version "6.2.1"
+}
+
+group 'ru.drudenko.tools'
+version '1.0-SNAPSHOT'
+
+bootJar {
+    enabled = false
+}
+jar {
+    enabled = true
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    implementation "org.springframework.boot:spring-boot-configuration-processor"
+
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-starter-activemq'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    implementation 'com.h2database:h2'
+    implementation group: 'org.liquibase', name: 'liquibase-core', version: '3.5.1'
+
+    implementation 'org.apache.camel:camel-spring-boot:2.24.1'
+    implementation 'org.apache.camel:camel-spring:2.24.1'
+    implementation 'org.apache.camel:camel-jms:2.24.1'
+
+    implementation(group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.10.3')
+    implementation(group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.10.3')
+    implementation(group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.10.3')
+
+    implementation(group: 'io.springfox', name: 'springfox-swagger2', version: '2.8.0')
+    implementation(group: 'io.springfox', name: 'springfox-bean-validators', version: '2.8.0')
+    implementation("io.springfox:springfox-swagger-ui:2.8.0")
+    implementation("io.github.swagger2markup:swagger2markup:1.3.1")
+
+    implementation group: 'org.projectlombok', name: 'lombok', version: '1.18.8'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.8'
+
+}
+
+task makeRpm(type: Rpm) {
+    os LINUX
+    postInstall file('scripts/postinstall.sh')
+    postUninstall file('scripts/preremove.sh')
+
+    release = (System.getenv("CI_RPM_RELEASE_OVERRIDE") == null ? "1" : System.getenv("CI_RPM_RELEASE_OVERRIDE"));
+    String postfix = (System.getenv("CI_MSB_PCKG_POSTFIX") == null ? (System.getenv("CI_COMMIT_REF_SLUG") == null ? "-SNAPSHOT" : "-" + System.getenv("CI_COMMIT_REF_SLUG")) : System.getenv("CI_MSB_PCKG_POSTFIX"));
+    if (postfix.toLowerCase().startsWith("-release")) {
+        postfix = "";
+    }
+    packageName += postfix;
+
+    from('scripts/init.d/boot-service.template') {
+        into('/etc/init.d')
+        setFileMode(0755)
+        setFileType(CONFIG)
+        setCreateDirectoryEntry(false)
+        setUser('root')
+        setPermissionGroup('root')
+        rename('boot-service.template', 'tibco-stub-and-mock')
+        filter(FixCrLfFilter,
+                eol: FixCrLfFilter.CrLf.newInstance('lf'),
+                tab: FixCrLfFilter.AddAsisRemove.newInstance('asis'),
+                eof: FixCrLfFilter.AddAsisRemove.newInstance('remove'),
+                fixlast: true)
+    }
+
+    setUser('tomcat')
+    setPermissionGroup('tomcat')
+
+    from('src/main/resources/application.properties') {
+        into("/opt/tibco-stub-and-mock/conf/tibco-stub-and-mock")
+        setFileMode(0444)
+        setFileType(new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+        setCreateDirectoryEntry(false)
+    }
+
+
+    from('src/main/resources/log4j.xml') {
+        into("/opt/tibco-stub-and-mock/conf/tibco-stub-and-mock")
+        setFileMode(0444)
+        setFileType(new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+        setCreateDirectoryEntry(false)
+    }
+
+    from('src/main/resources/logback.xml') {
+        into("/opt/tibco-stub-and-mock/conf/tibco-stub-and-mock")
+        setFileMode(0444)
+        setFileType(new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
+        setCreateDirectoryEntry(false)
+    }
+
+    from(bootJar) {
+        into("/opt/tibco-stub-and-mock/libs")
+        setCreateDirectoryEntry(true)
+        setFileMode(0444)
+    }
+}
+
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'ru.drudenko.tools'
+            artifactId = 'tibco-stub-and-mock'
+            version = '1.0'
+
+            from components.java
+        }
+    }
+}
+
+[compileJava]*.options*.encoding = 'UTF-8'
+

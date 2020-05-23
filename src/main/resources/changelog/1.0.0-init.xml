@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+
+    <changeSet id="0" author="drudenko">
+        <createSequence sequenceName="seq_tb_queue_settings_id"/>
+        <createSequence sequenceName="seq_tb_queue_response_id"/>
+    </changeSet>
+
+    <changeSet author="drudenko" id="1">
+        <createTable tableName="tb_queue_settings">
+            <column name="id" type="BIGSERIAL" valueSequenceNext="seq_tb_queue_settings_id">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="queue_from" type="VARCHAR(200)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="queue_to" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="xpath" type="VARCHAR(2000)"/>
+            <column name="enable" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet author="drudenko" id="2">
+        <createTable tableName="tb_queue_response">
+            <column name="id" type="BIGSERIAL" valueSequenceNext="seq_tb_queue_response_id">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="xml" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="settings_id" type="NUMBER"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet author="drudenko" id="3">
+        <insert tableName="tb_queue_settings">
+            <column name="id">-100</column>
+            <column name="queue_from">Test.Rq</column>
+            <column name="queue_to">Test.Rs</column>
+        </insert>
+    </changeSet>
+</databaseChangeLog>
