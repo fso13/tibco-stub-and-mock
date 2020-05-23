@@ -11,7 +11,7 @@ plugins {
 }
 
 group 'ru.drudenko.tools'
-version '1.0-SNAPSHOT'
+version '1.0.0'
 
 bootJar {
     enabled = false
@@ -64,21 +64,13 @@ task makeRpm(type: Rpm) {
     postInstall file('scripts/postinstall.sh')
     postUninstall file('scripts/preremove.sh')
 
-    release = (System.getenv("CI_RPM_RELEASE_OVERRIDE") == null ? "1" : System.getenv("CI_RPM_RELEASE_OVERRIDE"));
-    String postfix = (System.getenv("CI_MSB_PCKG_POSTFIX") == null ? (System.getenv("CI_COMMIT_REF_SLUG") == null ? "-SNAPSHOT" : "-" + System.getenv("CI_COMMIT_REF_SLUG")) : System.getenv("CI_MSB_PCKG_POSTFIX"));
-    if (postfix.toLowerCase().startsWith("-release")) {
-        postfix = "";
-    }
-    packageName += postfix;
-
-    from('scripts/init.d/boot-service.template') {
+    from('scripts/init.d/tibco-stub-and-mock') {
         into('/etc/init.d')
         setFileMode(0755)
         setFileType(CONFIG)
         setCreateDirectoryEntry(false)
         setUser('root')
         setPermissionGroup('root')
-        rename('boot-service.template', 'tibco-stub-and-mock')
         filter(FixCrLfFilter,
                 eol: FixCrLfFilter.CrLf.newInstance('lf'),
                 tab: FixCrLfFilter.AddAsisRemove.newInstance('asis'),
@@ -119,17 +111,16 @@ task makeRpm(type: Rpm) {
 }
 
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId = 'ru.drudenko.tools'
-            artifactId = 'tibco-stub-and-mock'
-            version = '1.0'
-
-            from components.java
-        }
-    }
-}
+//publishing {
+//    publications {
+//        maven(MavenPublication) {
+//            artifactId = 'tibco-stub-and-mock'
+//            version = '1.0'
+//
+//            from components.java
+//        }
+//    }
+//}
 
 [compileJava]*.options*.encoding = 'UTF-8'
 
