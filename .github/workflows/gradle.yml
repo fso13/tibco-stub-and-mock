@@ -38,6 +38,6 @@ jobs:
       uses: Roang-zero1/github-upload-release-artifacts-action@master
       with:
         args:
-        - build/distributions/ru.drudenko.tools.tibco-stub-and-mock-1.0.0.noarch.rpm
+        - build/distributions/
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
