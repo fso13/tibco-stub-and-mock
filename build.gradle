@@ -11,7 +11,7 @@ plugins {
 }
 
 group 'ru.drudenko.tools'
-version '1.0-SNAPSHOT'
+version '1.0.2'
 
 bootJar {
     enabled = false
@@ -64,21 +64,13 @@ task makeRpm(type: Rpm) {
     postInstall file('scripts/postinstall.sh')
     postUninstall file('scripts/preremove.sh')
 
-    release = (System.getenv("CI_RPM_RELEASE_OVERRIDE") == null ? "1" : System.getenv("CI_RPM_RELEASE_OVERRIDE"));
-    String postfix = (System.getenv("CI_MSB_PCKG_POSTFIX") == null ? (System.getenv("CI_COMMIT_REF_SLUG") == null ? "-SNAPSHOT" : "-" + System.getenv("CI_COMMIT_REF_SLUG")) : System.getenv("CI_MSB_PCKG_POSTFIX"));
-    if (postfix.toLowerCase().startsWith("-release")) {
-        postfix = "";
-    }
-    packageName += postfix;
-
-    from('scripts/init.d/boot-service.template') {
+    from('scripts/init.d/tibco-stub-and-mock') {
         into('/etc/init.d')
         setFileMode(0755)
         setFileType(CONFIG)
         setCreateDirectoryEntry(false)
         setUser('root')
         setPermissionGroup('root')
-        rename('boot-service.template', 'tibco-stub-and-mock')
         filter(FixCrLfFilter,
                 eol: FixCrLfFilter.CrLf.newInstance('lf'),
                 tab: FixCrLfFilter.AddAsisRemove.newInstance('asis'),
@@ -118,15 +110,29 @@ task makeRpm(type: Rpm) {
     }
 }
 
+def rpmFile = file("$buildDir/distributions/${project.name}-${project.version}.noarch.rpm")
+def rpmArtifact = artifacts.add('archives', rpmFile) {
+    type 'rpm'
+    builtBy 'makeRpm'
+}
 
 publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/fso13/tibco-stub-and-mock")
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+            }
+        }
+    }
     publications {
-        maven(MavenPublication) {
+        rpm(MavenPublication) {
             groupId = 'ru.drudenko.tools'
             artifactId = 'tibco-stub-and-mock'
-            version = '1.0'
 
-            from components.java
+            artifact rpmArtifact
         }
     }
 }
