@@ -110,17 +110,32 @@ task makeRpm(type: Rpm) {
     }
 }
 
+def rpmFile = file("$buildDir/distributions/ru.drudenko.tools.tibco-stub-and-mock-1.0.0.noarch.rpm")
+def rpmArtifact = artifacts.add('archives', rpmFile) {
+    type 'rpm'
+    builtBy 'makeRpm'
+}
 
-//publishing {
-//    publications {
-//        maven(MavenPublication) {
-//            artifactId = 'tibco-stub-and-mock'
-//            version = '1.0'
-//
-//            from components.java
-//        }
-//    }
-//}
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/fso13/tibco-stub-and-mock")
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+            }
+        }
+    }
+    publications {
+        rpm(MavenPublication) {
+            groupId = 'ru.drudenko.tools'
+            artifactId = 'tibco-stub-and-mock'
+
+            artifact rpmArtifact
+        }
+    }
+}
 
 [compileJava]*.options*.encoding = 'UTF-8'
 
