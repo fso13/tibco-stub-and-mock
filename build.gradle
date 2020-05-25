@@ -131,7 +131,7 @@ publishing {
         rpm(MavenPublication) {
             groupId = 'ru.drudenko.tools'
             artifactId = 'tibco-stub-and-mock'
-            version = project.version + '-' + System.getenv("BUILD_NUMBER") ?: '0'
+            version = project.findProperty("version") + '-' + System.getenv("BUILD_NUMBER") ?: '0'
             artifact rpmArtifact
         }
     }
