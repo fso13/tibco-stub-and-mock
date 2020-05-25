@@ -11,7 +11,7 @@ plugins {
 }
 
 group 'ru.drudenko.tools'
-version '1.0.3'
+version '1.0.4'
 
 bootJar {
     enabled = false
