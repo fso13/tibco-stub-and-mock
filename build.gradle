@@ -11,7 +11,7 @@ plugins {
 }
 
 group 'ru.drudenko.tools'
-version '1.0.2'
+version '1.0.0'
 
 bootJar {
     enabled = false
@@ -131,7 +131,7 @@ publishing {
         rpm(MavenPublication) {
             groupId = 'ru.drudenko.tools'
             artifactId = 'tibco-stub-and-mock'
-
+            version = project.version + '-' + System.getenv("BUILD_NUMBER") ?: '0'
             artifact rpmArtifact
         }
     }

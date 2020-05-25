@@ -26,6 +26,12 @@ jobs:
     - name: Build with Gradle
       run: gradle build makeRpm
 
+    - name: Generate build number
+      uses: einaregilsson/build-number@v2
+      with:
+       token: ${{secrets.github_token}}
+
+
     # The USERNAME and TOKEN need to correspond to the credentials environment variables used in
     # the publishing section of your build.gradle
     - name: Publish to GitHub Packages 1
